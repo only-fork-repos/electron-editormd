@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>electron-editor.md</title>
+  <link rel="stylesheet" href="css/editormd.css">
+  <link rel="stylesheet" href="css/nprogress.css">
+  <script>
+  // window.$ = window.jQuery = require('./js/jquery.js');
+  window.$ = window.jQuery = require('./js/jquery-3.1.1.min.js');
+  </script>
+  <script src="./js/editormd.js"></script>
+  <script src="./js/nprogress.js"></script>
+  <style>
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    padding: 0px;
+    margin: 0px;
+  }
+  </style>
+  <script>
+  // const $ = jQuery = require('./js/jquery.min');
+  // const editormd = require('./js/editormd')();
+  // /** 注册插件 **/
+  // // 使用引用链接插件
+  // const referenceLinkDialog = require('./js/plugins/reference-link-dialog/reference-link-dialog');
+  // referenceLinkDialog(editormd);
+  // // 代码块插件
+  // const codeBlockDialog = require('./js/plugins/code-block-dialog/code-block-dialog');
+  // codeBlockDialog(editormd);
+
+  /* beautify preserve:start */
+  const { dialog } = require('electron').remote
+  const { ipcRenderer } = require('electron')
+  const fs = require('fs');
+  /* beautify preserve:end */
+
+  let currentFileInfo = {};
+  var Editor
+  $(function() {
+    // init editormd
+    Editor = editormd("editor", {
+        width: "100%",
+        height: "100%",
+        codeFold: true,
+        emoji: true,
+        taskList: true,
+        imageUpload: true,
+        imageFormats: ["jpg", "jpeg", "gif", "png", "bmp", "webp"],
+        tocm: true,
+        toc: true,
+        path: './js/lib/',
+        pluginPath: './js/plugins/',
+        toolbarIcons: function() {
+          // 自定义工具栏图标
+          let toolbarIcons = editormd.toolbarModes['full'];
+          toolbarIcons.splice(toolbarIcons.indexOf('fullscreen'), 1);
+          toolbarIcons.unshift('newFile', 'openFile', 'saveFile')
+          console.log('Toolbar Icons :' + toolbarIcons);
+          return toolbarIcons;
+        },
+        toolbarIconsClass: {
+          // new file
+          newFile: 'fa-file-o',
+          // open file
+          openFile: 'fa-folder-open-o',
+          // save file
+          saveFile: 'fa-floppy-o'
+        },
+        toolbarHandlers: {
+          newFile: newFile,
+          openFile: openFile,
+          saveFile: saveFile
+        },
+        disabledKeyMaps:["F11"]  // 禁用全屏快捷键
+        // onload :function() {
+        //  在编辑区域添加自定义快捷键
+        //   let keyMap = {
+        //     "Ctrl-S": function(cm) {
+        //       console.log(cm);
+        //     }
+        //   }
+        //   this.addKeyMap(keyMap)
+        // }
+      })
+      // init editormd end
+
+
+  })
+  </script>
+</head>
+
+<body>
+  <div id="editor" style="margin:0px;border:none;">
+  </div>
+</body>
+<script>
+// 新建文件
+function newFile(cm, icon, cursor, selection) {
+  console.log('new file');
+  NProgress.start()
+  NProgress.set(0.2)
+  let newFilePath = mdDialog.showSaveDialog('新建Markdown文件');
+  if (!newFilePath) {
+    NProgress.done();
+    return
+  }
+  console.log(newFilePath);
+  NProgress.set(0.4)
+  fs.writeFileSync(newFilePath, '', 'utf8');
+  currentFileInfo.filepath = newFilePath;
+  NProgress.set(0.8)
+  this.setMarkdown('');
+  NProgress.done();
+}
+// 打开文件
+function openFile(cm, icon, cursor, selection) {
+  console.log('open file');
+  NProgress.start()
+  NProgress.set(0.2)
+  let filePaths = mdDialog.showOpenDialog('打开Markdown文件')
+  if (!filePaths) {
+    NProgress.done();
+    return
+  }
+  console.log(filePaths);
+  NProgress.set(0.4)
+  let fileContent = fs.readFileSync(filePaths[0], 'utf8');
+  NProgress.set(0.6)
+  this.setMarkdown(fileContent);
+  NProgress.set(0.8)
+  currentFileInfo.filepath = filePaths[0];
+  NProgress.done();
+}
+// 保存文件
+function saveFile(cm, icon, cursor, selection) {
+  console.log('save file');
+  NProgress.start()
+  NProgress.set(0.2)
+  if (!currentFileInfo.filepath) {
+
+    let saveFilePath = mdDialog.showSaveDialog('保存Markdown文件');
+    if (!saveFilePath) {
+      NProgress.done();
+      return
+    }
+    currentFileInfo.filepath = saveFilePath;
+  }
+  NProgress.set(0.4)
+  let fileContent = this.getMarkdown();
+  NProgress.set(0.6)
+  fs.writeFileSync(currentFileInfo.filepath, fileContent, 'utf8');
+  NProgress.set(0.8)
+  this.save();
+  NProgress.done();
+}
+
+mdDialog = {
+  showSaveDialog: function(title) {
+    let saveFilePath = dialog.showSaveDialog({
+      title: title,
+      filters: [{
+        name: 'Makrdown',
+        extensions: ['md', 'txt'],
+      }, {
+        name: '所有文件',
+        extensions: ['*']
+      }]
+    })
+    return saveFilePath ? saveFilePath : '';
+  },
+  showOpenDialog: function(title) {
+    let filePaths = dialog.showOpenDialog({
+      title: '打开Markdown文件',
+      filters: [{
+        name: 'Makrdown',
+        extensions: ['md', 'txt'],
+      }, {
+        name: '所有文件',
+        extensions: ['*']
+      }],
+      properties: ['openFile']
+    })
+    return filePaths ? filePaths : '';
+  }
+}
+
+// console.log(ipcRenderer);
+ipcRenderer.on('newFile', function(event, arg) {
+  console.log('recevied newFile command ');
+  $(Editor.toolbarIcons[0]).click()
+})
+
+ipcRenderer.on('openFile', function(event, arg) {
+  console.log('recevied openFile command ');
+  $(Editor.toolbarIcons[1]).click()
+})
+
+ipcRenderer.on('saveFile', function(event, arg) {
+  console.log('recevied saveFile command ');
+  $(Editor.toolbarIcons[2]).click()
+})
+</script>
+
+</html>
